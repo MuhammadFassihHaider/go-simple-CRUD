@@ -15,7 +15,7 @@ import (
 	"strconv"
 )
 
-type AddMovieBody struct {
+type MutateMovieBody struct {
 	ISBN     string    `json:"isbn"`
 	Title    string    `json:"title"`
 	Director *Director `json:"director"`
@@ -136,7 +136,7 @@ func addMovie(w http.ResponseWriter, r *http.Request) {
 	defer catchErrors()
 	w.Header().Set("Content-Type:", "application/json")
 
-	var movie AddMovieBody
+	var movie MutateMovieBody
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -172,6 +172,44 @@ func addMovie(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func updateMovie(w http.ResponseWriter, r *http.Request) {
+	defer catchErrors()
+	w.Header().Set("Content-Type:", "application/json")
+
+	var movie Movie
+	id := mux.Vars(r)["id"]
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&movie)
+	decoder.DisallowUnknownFields()
+
+	if err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(Error{Message: "Invalid arguments"})
+		return
+	}
+
+	if movie.Title == "" || movie.Director.Firstname == "" || movie.Director.Lastname == "" || movie.ISBN == "" {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(Error{Message: "Invalid arguments!"})
+		return
+	}
+
+	var index int
+	for i, oldMovie := range movies {
+		if id == oldMovie.Id {
+			index = i
+			break
+		}
+	}
+
+	movie.Id = movies[index].Id
+	movies = append(movies[:index], movies[index+1:]...)
+	movies = append(movies, movie)
+	json.NewEncoder(w).Encode(AddMovieResponse{Movies: movies})
+
+}
+
 func main() {
 	router := mux.NewRouter()
 
@@ -181,6 +219,7 @@ func main() {
 	router.HandleFunc("/movies/{id}", getMovieById).Methods("GET")
 	router.HandleFunc("/movies/{id}", deleteMovieById).Methods("DELETE")
 	router.HandleFunc("/movies", addMovie).Methods("POST")
+	router.HandleFunc("/movies/{id}", updateMovie).Methods("PUT")
 
 	fmt.Println("Starting server on port 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
